@@ -1,0 +1,17 @@
+Literatura:
+
+1. Abhulimen, K. E., & Ogunti, E. O. (2021). Age estimation from facial images: A review. Journal of King Saud University – Computer and Information Sciences, 33(10), 1192–1203. https://doi.org/10.1016/j.jksuci.2019.08.006
+
+2. Rothe, R., Timofte, R., & Van Gool, L. (2015). DEX: Deep expectation of apparent age from a single image. IEEE ICCV Workshops, 10–15. https://doi.org/10.1109/ICCVW.2015.41
+
+3. Levi, G., & Hassner, T. (2015). Age and gender classification using deep convolutional neural networks. IEEE CVPR Workshops, 34–42. https://doi.org/10.1109/CVPRW.2015.7301352
+
+4. Kopalidis, P. M., Vretos, N., & Daras, P. (2024). Facial expression recognition: A comprehensive survey. Image and Vision Computing, 143, 104791. https://doi.org/10.1016/j.imavis.2023.104791
+
+5. Simonyan, K., & Zisserman, A. (2015). Very deep convolutional networks for large-scale image recognition. ICLR. arXiv:1409.1556
+
+6. Howard, A. G., Zhu, M., Chen, B., et al. (2017). MobileNets: Efficient convolutional neural networks for mobile vision applications. arXiv:1704.04861
+
+7. Abadi, M., Agarwal, A., Barham, P., et al. (2016). TensorFlow: Large-scale machine learning on heterogeneous systems. 12th USENIX OSDI.
+
+8. Chollet, F. (2015). Keras: The Python deep learning library. GitHub / keras.io
