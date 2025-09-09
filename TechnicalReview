@@ -1,0 +1,265 @@
+4) Alexa_Final.ipynb (FINAL)
+Svrha
+
+End-to-end demo: detekcija lica na slici, iz svakog lica izdvajanje ROI, menjanje dimenzija po tasku i tri nezavisne predikcije:
+
+pol (gender),
+
+uzrast (age),
+
+emocija (emotion),
+a zatim ispis rezultata i iscrtavanje okvira preko lica.
+
+Objašnjenje koda
+
+(Kolab) drive.mount(...), %cd ... — mount i radni direktorijum.
+
+from keras.models import load_model / from PIL import Image / import cv2, numpy as np
+Učitavanje modela i obrada slika.
+
+Učitavanje pretreniranih modela:
+
+age_model    = load_model('./1.1_age_input_output/output/age_model_pretrained.h5')
+gender_model = load_model('./1.2_gender_input_output/output/gender_model_pretrained.h5')
+emotion_model= load_model('./1.3_emotion_input_output/output/emotion_model_pretrained.h5')
+age_model.summary(); gender_model.summary(); emotion_model.summary()
+
+
+Definicije naziva klasa:
+
+age_ranges    = ['(0-2)','(4-6)','(8-13)','(15-20)','(25-32)','(38-43)','(48-53)']  # primer
+gender_ranges = ['Male','Female']
+emotion_ranges= ['Happy','Neutral','Sad']  # primer
+
+
+(Prilagodite vašim labelama iz trening fajlova.)
+
+Učitavanje slike i detekcija lica (Haar cascade):
+
+test_image  = cv2.imread(img_path)
+gray        = cv2.cvtColor(test_image, cv2.COLOR_BGR2GRAY)
+face_cascade= cv2.CascadeClassifier('./1.4_test_input/cv2_cascade_classifier/haarcascade_frontalface_default.xml')
+faces       = face_cascade.detectMultiScale(gray, 1.3, 5)
+
+
+detectMultiScale: vraća listu (x,y,w,h) za svako lice.
+
+Petlja preko pronađenih lica:
+
+for (x,y,w,h) in faces:
+    cv2.rectangle(test_image,(x,y),(x+w,y+h),(203,12,255),2)  # okvir oko lica
+    img_gray = gray[y:y+h, x:x+w]  # ROI (lice)
+
+    # EMOTION
+    emotion_img  = cv2.resize(img_gray, (48,48), interpolation=cv2.INTER_AREA)
+    emotion_in   = np.expand_dims(np.array(emotion_img), axis=0)
+    output_emotion = emotion_ranges[np.argmax(emotion_model.predict(emotion_in))]
+
+    # GENDER
+    gender_img  = cv2.resize(img_gray, (100,100), interpolation=cv2.INTER_AREA)
+    gender_in   = np.expand_dims(np.array(gender_img), axis=0)
+    output_gender = gender_ranges[np.argmax(gender_model.predict(gender_in))]
+
+    # AGE
+    age_img   = cv2.resize(img_gray, (200,200), interpolation=cv2.INTER_AREA)
+    age_in    = age_img.reshape(-1,200,200,1)
+    output_age  = age_ranges[np.argmax(age_model.predict(age_in))]
+
+    output_str = f"{output_gender}, {output_age}, {output_emotion}"
+    # (opciono) cv2.putText(test_image, output_str, (x,y-10), ...)
+
+
+Svaki task ima drugačiju cilјnu rezoluciju (48/100/200) jer su tako trenirani modeli.
+
+np.argmax(...) bira klasu sa najvećom verovatnoćom.
+
+Prikaz rezultata:
+Opciono prikaz preko PIL.Image ili matplotlib, čuvanje slike sa nacrtanim okvirima/labelama.
+
+Ulaz/izlaz
+
+Ulaz: kolor slika sa licima (automatski konvertuje u gray).
+
+Izlaz: slika sa okvirima i tekstom (pol, uzrast, emocija) po licu + ispis u konzoli.
+
+1) Alexa_age.ipynb (age)
+Svrha
+
+Treniranje/učitavanje CNN modela za klasifikaciju starosnih klasa (npr. 7 klasa) iz grayscale isečka lica veličine 200×200.
+
+Objašnjenje koda (po blokovima/linijama)
+
+import pandas as pd, numpy as np, matplotlib.pyplot as plt, cv2, os, ...
+Uvoz standardnih biblioteka za rad sa tabelama, nizovima, crtanje i obradom slika.
+
+from sklearn.model_selection import train_test_split, ...
+Podela na train/test i evaluacione metrike (npr. konfuziona matrica).
+
+(po potrebi) raspakivanje ZIP seta slika (ako koristite arhivu) – ekstrakcija ulaznih podataka.
+
+train_aug_df = pd.read_csv(...train_augmented.csv) / test_df = pd.read_csv(...test.csv)
+Učitavanje CSV-ova sa kolonama: filename (putanja do slike) i age (starosna klasa).
+
+class_labels_reassign = {...} + df['target'] = df['age'].map(...)
+Mapiranje originalnih starosnih oznaka u konsolidovane klase (target).
+
+train_aug_filenames_list = list(train_aug_df['filename']) … / tf.constant(...)
+Lista putanja i lista labela → pretvoreno u TensorFlow konstante (kasnije za tf.data pipeline).
+
+Model (Sequential CNN):
+
+final_cnn = Sequential()
+final_cnn.add(Conv2D(32, 3, activation='relu', input_shape=(200,200,1)))
+final_cnn.add(AveragePooling2D((2,2)))
+final_cnn.add(Conv2D(64, 3, activation='relu'));  final_cnn.add(AveragePooling2D((2,2)))
+final_cnn.add(Conv2D(128,3, activation='relu'));  final_cnn.add(AveragePooling2D((2,2)))
+final_cnn.add(Conv2D(256,3, activation='relu'));  final_cnn.add(AveragePooling2D((2,2)))
+final_cnn.add(GlobalAveragePooling2D())
+final_cnn.add(Dense(132, activation='relu'))
+final_cnn.add(Dense(7, activation='softmax'))
+
+
+Conv2D + Pooling: izdvajanje hijerarhijskih karakteristika lica (teksture, oblici).
+
+GlobalAveragePooling2D: sabija prostorne aktivacije u vektor po filteru (256).
+
+Dense(132): prelazni sloj („vrat boce“) ka izlazu.
+
+Dense(7, softmax): verovatnoće za 7 starosnih klasa.
+
+final_cnn.compile(...)
+Tipično: optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'].
+
+Trening: final_cnn.fit(train_dataset, validation_data=valid_dataset, epochs=...)
+Učitava batcheve, prati loss/acc, čuva istoriju u history.
+
+Crtanje krivih: plt.plot(history.history['loss'], ...) i sl.
+Prikaz train/val loss i train/val accuracy.
+
+Evaluacija:
+
+final_cnn_score = final_cnn.evaluate(test_dataset, verbose=1)
+print(final_cnn.metrics_names[0], final_cnn_score[0])  # loss
+print(final_cnn.metrics_names[1], final_cnn_score[1])  # acc
+
+
+(U nekim ćelijama) load_model(export_dir) + model.summary()
+Alternativa: umesto treninga – učitavanje već pretreniranog age_model_pretrained.h5.
+
+Ulaz/izlaz
+
+Ulaz: isečak lica 200×200 (1 kanal).
+
+Izlaz: indeks (i naziv) starosne klase (od 7 klasa).
+
+Najčešće greške
+
+Putanje u CSV-u ne postoje → proveriti relativne/apsolutne putanje.
+
+Dimenzija ulaza ≠ (200,200,1) → cv2.resize + eksplicitno dodati kanal.
+
+2) Alexa_gender.ipynb (gender)
+Svrha
+
+Treniranje/učitavanje CNN modela za klasifikaciju pola iz grayscale isečka lica veličine 100×100.
+
+Objašnjenje koda
+
+from google.colab import drive; drive.mount(...) / %cd ...
+Kolab mount i navigacija — ako radite lokalno, preskočiti.
+
+import pandas as pd, numpy as np, matplotlib.pyplot as plt, cv2, os
+Standardni uvozi.
+
+Arhitektura (Functional API):
+
+input  = Input(shape=(100,100,1))
+conv1  = Conv2D(32,  (3,3), padding='same', kernel_regularizer=l2(0.001))(input)
+conv1  = Dropout(0.1)(conv1); conv1 = Activation('relu')(conv1)
+pool1  = MaxPooling2D((2,2))(conv1)
+
+conv2  = Conv2D(64,  (3,3), padding='same', kernel_regularizer=l2(0.001))(pool1)
+conv2  = Dropout(0.1)(conv2); conv2 = Activation('relu')(conv2)
+pool2  = MaxPooling2D((2,2))(conv2)
+
+conv3  = Conv2D(128, (3,3), padding='same', kernel_regularizer=l2(0.001))(pool2)
+conv3  = Dropout(0.1)(conv3); conv3 = Activation('relu')(conv3)
+pool3  = MaxPooling2D((2,2))(conv3)
+
+conv4  = Conv2D(256, (3,3), padding='same', kernel_regularizer=l2(0.001))(pool3)
+conv4  = Dropout(0.1)(conv4); conv4 = Activation('relu')(conv4)
+pool4  = MaxPooling2D((2,2))(conv4)
+
+flat   = Flatten()(pool4)
+dense1 = Dense(128, activation='relu')(flat)
+drop1  = Dropout(0.2)(dense1)
+output = Dense(2, activation='sigmoid')(drop1)
+model  = Model(inputs=input, outputs=output)
+
+
+L2 regularizacija + Dropout: ublažavanje overfitting-a.
+
+Sigmoid(2): iako je standard za binarnu klasifikaciju Dense(1, activation='sigmoid'), ovde su 2 izlaza (po klasi). To radi uz sparse_categorical_crossentropy (one-hot interno) – ostaviti kako jeste jer se notebook tako kompajlira.
+
+model.compile(optimizer="adam", loss=["sparse_categorical_crossentropy"], metrics=['accuracy'])
+Adam optimizator; gubitak prilagođen indeksnim labelama (0/1).
+
+Trening:
+save = model.fit(x_train, y_train, validation_data=(x_test,y_test), epochs=30, callbacks=[callback_list])
+
+Ulaz/izlaz
+
+Ulaz: isečak lica 100×100 (1 kanal).
+
+Izlaz: pol (npr. ['Male','Female']) — predikcija se uzima np.argmax.
+
+3) Alexa_emotion.ipynb (emotion)
+Svrha
+
+Treniranje/učitavanje CNN modela za prepoznavanje emocija iz grayscale isečka lica veličine 48×48 (npr. 3 klase u ovom fajlu).
+
+Objašnjenje koda
+
+import numpy as np, tensorflow as tf, train_test_split, os, cv2, cv2_imshow, matplotlib.pyplot
+Standardni uvozi za obradu i prikaz slika.
+
+Arhitektura (Functional API):
+
+input  = Input(shape=(48,48,1))
+conv1  = Conv2D(32,  (3,3), padding='same', kernel_regularizer=l2(0.001))(input)
+conv1  = Dropout(0.1)(conv1); conv1 = Activation('relu')(conv1)
+pool1  = MaxPooling2D((2,2))(conv1)
+
+conv2  = Conv2D(64,  (3,3), padding='same', kernel_regularizer=l2(0.001))(pool1)
+conv2  = Dropout(0.1)(conv2); conv2 = Activation('relu')(conv2)
+pool2  = MaxPooling2D((2,2))(conv2)
+
+conv3  = Conv2D(128, (3,3), padding='same', kernel_regularizer=l2(0.001))(pool2)
+conv3  = Dropout(0.1)(conv3); conv3 = Activation('relu')(conv3)
+pool3  = MaxPooling2D((2,2))(conv3)
+
+conv4  = Conv2D(256, (3,3), padding='same', kernel_regularizer=l2(0.001))(pool3)
+conv4  = Dropout(0.1)(conv4); conv4 = Activation('relu')(conv4)
+pool4  = MaxPooling2D((2,2))(conv4)
+
+flat   = Flatten()(pool4)
+dense1 = Dense(128, activation='relu')(flat)
+drop1  = Dropout(0.2)(dense1)
+output = Dense(3, activation='sigmoid')(drop1)
+model  = Model(inputs=input, outputs=output)
+
+
+Identičan motiv kao kod gender, samo manja rezolucija (48×48).
+
+model.compile(optimizer="adam", loss=["categorical_crossentropy"], metrics=['accuracy'])
+Ovde je očekivano one-hot kodiran Y_train/Y_test (3 izlaza).
+
+Trening:
+model.fit(X_train, Y_train, batch_size=32, validation_data=(X_test,Y_test), epochs=50, callbacks=[callback_list])
+
+Ulaz/izlaz
+
+Ulaz: isečak lica 48×48 (1 kanal).
+
+Izlaz: 3 emocije (npr. ['happy','neutral','sad'] — prilagoditi vašim labelama). Predikcija: np.argmax
+
